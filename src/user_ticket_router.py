@@ -5,9 +5,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from aiogram.dispatcher.router import Router
 from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
-from src.utils import secret_code_is_correct, TEXTS
 from logging import getLogger
 
+from src.utils import get_full_name_or_unknown, secret_code_is_correct, TEXTS
 import src.env as env
 
 logger = getLogger(__name__)
@@ -26,7 +26,8 @@ async def start(message: Message, state: FSMContext) -> None:
     This handler receives messages with `/start` command
     """
     await state.set_state(Ticket.secret)
-    await message.answer(TEXTS["welcome"](message.from_user.full_name),reply_markup=ReplyKeyboardRemove())
+    user_name = get_full_name_or_unknown(message)
+    await message.answer(TEXTS["welcome"](user_name),reply_markup=ReplyKeyboardRemove())
 
 @user_ticket_router.message(Command("cancel"))
 async def cancel_handler(message: Message, state: FSMContext) -> None:
@@ -53,7 +54,7 @@ async def secret_pass(message: Message, state: FSMContext) -> None:
         await state.set_state(Ticket.concern)
         await message.reply(TEXTS["secret_correct"], reply_markup=ReplyKeyboardRemove())
     else:
-        logger.info(f"untrusted: {message.text} by user {message.from_user.full_name}")
+        logger.info(f"untrusted: {message.text} by user {message.from_user.id}")
     await state.update_data(trusted = is_trusted)
 
 
