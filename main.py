@@ -12,6 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
 from src.utils import install_logs, secret_code_is_correct, TEXTS
+import src.db
 import src.env as env
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,11 @@ admin_router = Router(name="admin router")
 
 @admin_router.message(F.chat.func(lambda chat: str(chat.id) == env.SUPERGROUP_ID))
 async def reply_to_ticket(message: Message) -> None:
-    print(message.chat.id)
-    print(f"uuuuhhhh, replied {message.text}")
+    print("TODO: this is the routine for a ticket reply")
+
+@admin_router.message((F.from_user.id.in_(env.ADMIN_IDS)) & (F.text == '/open'))
+async def all_open(message: Message):
+    print("TODO: this should return all open tickets")
 
 # entry point -> user begins flow
 @user_ticket_router.message(Command("start"))
