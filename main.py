@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import sys
-from aiogram import Bot, Dispatcher
 from aiogram import F
 from aiogram import Bot, Dispatcher, html
 from aiogram.client.default import DefaultBotProperties
@@ -16,8 +14,8 @@ from aiogram.types.reply_keyboard_remove import ReplyKeyboardRemove
 from src.utils import install_logs, secret_code_is_correct, TEXTS
 import src.env as env
 
+logger = logging.getLogger(__name__)
 
-TOKEN = getenv("BOT_TOKEN")
 class Ticket(StatesGroup):
     secret = State()
     trusted = State()
