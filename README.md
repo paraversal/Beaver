@@ -88,6 +88,10 @@ bot token from BotFather.
    Startup validates the token, the group type, the topic (if configured), and
    bot-admin status.
 
+   Without `--env-file`, `.env` is loaded if present; otherwise only real
+   environment variables are used. For running on a server with Docker, see
+   [DEPLOY.md](DEPLOY.md).
+
 ### Finding the topic ID
 
 Only needed for a forum. The Bot API cannot list forum topics, so run the bot

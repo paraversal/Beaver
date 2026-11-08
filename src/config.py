@@ -108,10 +108,17 @@ class Config:
         environ: Mapping[str, str] | None = None,
     ) -> "Config":
         if environ is None:
-            path = Path(env_file or ".env")
-            if env_file is not None and not path.exists():
-                raise ConfigError(f"Environment file not found: {path}")
-            load_dotenv(dotenv_path=path, override=False)
+            # An explicitly requested file (e.g. --env-file .env.staging) must
+            # exist. Without one, .env is optional: in Docker the variables are
+            # injected by compose and no file is present. Real environment
+            # variables always win over the file (override=False).
+            if env_file is not None:
+                path = Path(env_file)
+                if not path.exists():
+                    raise ConfigError(f"Environment file not found: {path}")
+                load_dotenv(dotenv_path=path, override=False)
+            elif Path(".env").exists():
+                load_dotenv(dotenv_path=".env", override=False)
             source: Mapping[str, str] = os.environ
         else:
             source = environ

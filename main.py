@@ -140,8 +140,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Beaver Telegram support bot")
     parser.add_argument(
         "--env-file",
-        default=".env",
-        help="Env file to load (default: .env; use .env.staging for tests)",
+        default=None,
+        help=(
+            "Env file to load; it must exist if given. Without it, .env is "
+            "loaded when present, otherwise only real environment variables "
+            "are used (Docker). Use .env.staging for tests."
+        ),
     )
     parser.add_argument(
         "--clear-staging-tickets",

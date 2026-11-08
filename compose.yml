@@ -1,0 +1,16 @@
+services:
+  beaver-bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env                     # read on the host, injected as env vars
+    environment:
+      DB_PATH: /app/data/beaver.db     # pin the DB inside the mounted volume
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes: ["./data:/app/data"]      # the only writable path; owned by uid 10001
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
