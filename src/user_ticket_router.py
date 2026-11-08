@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from aiogram import F, Router
+from typing import Any, Awaitable, Callable
+
+from aiogram import BaseMiddleware, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.enums import ChatType
-from aiogram.types import Message
+from aiogram.types import Message, TelegramObject
 
 from src.app import App
 from src.db import Ticket, User
@@ -23,6 +25,27 @@ from src.utils import normalize_secret, parse_timestamp
 
 logger = logging.getLogger(__name__)
 user_ticket_router = Router(name="user_ticket")
+
+
+class PerUserLock(BaseMiddleware):
+    """Run one handler at a time per user (see App.user_lock)."""
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        app: App | None = data.get("app")
+        user = getattr(event, "from_user", None)
+        if app is None or user is None:
+            return await handler(event, data)
+        async with app.user_lock(user.id):
+            return await handler(event, data)
+
+
+# Inner middleware: wraps only the handler that matched, after filters ran.
+user_ticket_router.message.middleware(PerUserLock())
 
 
 def _is_private(message: Message) -> bool:

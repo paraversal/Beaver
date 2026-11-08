@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-from dataclasses import dataclass
+import weakref
+from dataclasses import dataclass, field
 
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus, ChatType
@@ -25,6 +27,20 @@ class App:
     bot_is_admin: bool
     # None means the inbox is the whole chat (a plain group has no topics).
     delivery_thread_id: int | None = None
+    # aiogram handles updates concurrently. Serialize work per user so that
+    # e.g. an album (several messages at once) cannot race to open two tickets
+    # or double-count verification attempts. Weak values: a lock disappears
+    # once no handler holds or awaits it.
+    _user_locks: weakref.WeakValueDictionary[int, asyncio.Lock] = field(
+        default_factory=weakref.WeakValueDictionary, repr=False
+    )
+
+    def user_lock(self, user_id: int) -> asyncio.Lock:
+        lock = self._user_locks.get(user_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._user_locks[user_id] = lock
+        return lock
 
     @classmethod
     async def create(cls, config: Config, bot: Bot) -> "App":

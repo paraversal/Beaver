@@ -29,7 +29,10 @@ class AdminAuth:
         self.config = config
         self.linked_channel_id = linked_channel_id
         self._administrators: set[int] = set()
-        self._loaded_at = 0.0
+        # None = never loaded. (A 0.0 sentinel breaks right after boot:
+        # time.monotonic() counts from boot, so for the first TTL seconds the
+        # cache looked fresh and group admins were not recognized.)
+        self._loaded_at: float | None = None
         self._ttl = 300.0
 
     async def refresh(self) -> None:
@@ -46,7 +49,7 @@ class AdminAuth:
         self._loaded_at = time.monotonic()
 
     async def _ensure_loaded(self) -> None:
-        if time.monotonic() - self._loaded_at > self._ttl:
+        if self._loaded_at is None or time.monotonic() - self._loaded_at > self._ttl:
             await self.refresh()
 
     def _is_support_chat(self, chat: Chat | None) -> bool:

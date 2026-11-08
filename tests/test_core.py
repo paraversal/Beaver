@@ -766,5 +766,101 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await auth.is_admin_user(3))
 
 
+class AuditRegressionTests(unittest.IsolatedAsyncioTestCase):
+    """Regression tests for issues found in the November 2026 audit."""
+
+    BASE_ENV = {
+        "BOT_TOKEN": "test-token",
+        "SUPPORT_CHAT_ID": "-1001234567890",
+        "SECRET_QUESTION": "City?",
+        "SECRETS": "Madrid",
+    }
+
+    def test_missing_default_env_file_is_fine(self):
+        # Docker: no .env file in the container, variables come from compose.
+        import os
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                with mock.patch.dict(os.environ, self.BASE_ENV, clear=False):
+                    config = Config.from_env()
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(config.bot_token, "test-token")
+
+    def test_missing_explicit_env_file_fails(self):
+        with self.assertRaises(ConfigError):
+            Config.from_env("/nonexistent/.env.staging")
+
+    def test_card_keeps_newest_updates(self):
+        updates = "".join(
+            f"\n\n💬 2026-11-08 10:{i:02d} UTC: update number {i} " + "x" * 40
+            for i in range(60)
+        )
+        text = card_text(make_ticket(user_updates=updates), make_user())
+        self.assertIn("update number 59", text)
+        self.assertNotIn("update number 0 ", text)
+        self.assertLess(len(text), 4096)
+
+    async def test_db_reopen_only_touches_closed_tickets(self):
+        tmp = tempfile.TemporaryDirectory()
+        db = Database(Path(tmp.name) / "reopen.db")
+        await db.connect()
+        await db.upsert_user(7, "jane", "Jane Doe", "en")
+        ticket_id = await db.create_ticket(7, "hi", 7, 1, -1001234567890, 42)
+        await db.reopen_ticket(ticket_id)  # already open: must be a no-op
+        self.assertEqual((await db.get_ticket(ticket_id)).reopened_count, 0)
+        await db.close()
+        tmp.cleanup()
+
+    async def test_reopen_conflict_with_newer_open_ticket(self):
+        from src.tickets import TicketConflict
+
+        tmp = tempfile.TemporaryDirectory()
+        db = Database(Path(tmp.name) / "conflict.db")
+        await db.connect()
+        await db.upsert_user(7, "jane", "Jane Doe", "en")
+        old_id = await db.create_ticket(7, "old", 7, 1, -1001234567890, 42)
+        await db.close_ticket(old_id, 7)
+        new_id = await db.create_ticket(7, "new", 7, 2, -1001234567890, 42)
+
+        app = SimpleNamespace(
+            bot=SimpleNamespace(), db=db, config=make_config(), delivery_thread_id=42
+        )
+        service = TicketService(app)
+        with self.assertRaises(TicketConflict) as ctx:
+            await service.reopen(await db.get_ticket(old_id))
+        self.assertEqual(ctx.exception.open_ticket_id, new_id)
+        self.assertEqual((await db.get_ticket(old_id)).status, "closed")
+        await db.close()
+        tmp.cleanup()
+
+    async def test_per_user_lock_serializes_handlers(self):
+        from src.app import App
+        from src.user_ticket_router import PerUserLock
+
+        app = App.__new__(App)
+        app._user_locks = __import__("weakref").WeakValueDictionary()
+        running = 0
+        peak = 0
+
+        async def handler(event, data):
+            nonlocal running, peak
+            running += 1
+            peak = max(peak, running)
+            await asyncio.sleep(0.01)
+            running -= 1
+
+        middleware = PerUserLock()
+        event = SimpleNamespace(from_user=SimpleNamespace(id=7))
+        await asyncio.gather(
+            *(middleware(handler, event, {"app": app}) for _ in range(5))
+        )
+        self.assertEqual(peak, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

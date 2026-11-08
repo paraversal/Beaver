@@ -39,6 +39,17 @@ class SupportUnavailable(RuntimeError):
     """The configured support destination cannot accept this ticket."""
 
 
+class TicketConflict(RuntimeError):
+    """A closed ticket cannot be reopened: the user already has another open one."""
+
+    def __init__(self, ticket_id: int, open_ticket_id: int) -> None:
+        super().__init__(
+            f"ticket #{ticket_id} cannot be reopened; #{open_ticket_id} is open"
+        )
+        self.ticket_id = ticket_id
+        self.open_ticket_id = open_ticket_id
+
+
 @dataclass(frozen=True)
 class UserMessageResult:
     ticket: Ticket
@@ -402,6 +413,16 @@ class TicketService:
         return updated
 
     async def reopen(self, ticket: Ticket, *, notify_user: bool = False) -> Ticket:
+        """Reopen a closed ticket. No-op for an open one.
+
+        Raises TicketConflict if the user has opened a different ticket since;
+        the DB allows only one open ticket per user.
+        """
+        if ticket.is_open:
+            return ticket
+        other = await self.db.get_open_ticket_for_user(ticket.user_id)
+        if other is not None and other.id != ticket.id:
+            raise TicketConflict(ticket.id, other.id)
         await self._clear_attention(ticket)
         await self.db.reopen_ticket(ticket.id)
         updated = await self._require_ticket(ticket.id)
@@ -443,7 +464,15 @@ class TicketService:
         sender_user_id: int | None,
     ) -> None:
         if not ticket.is_open:
-            ticket = await self.reopen(ticket, notify_user=False)
+            try:
+                ticket = await self.reopen(ticket, notify_user=False)
+            except TicketConflict as exc:
+                await self._reply_in_support(
+                    message,
+                    f"⚠️ #{exc.ticket_id} is closed and this user already has open "
+                    f"ticket #{exc.open_ticket_id}. Reply there instead. Nothing was sent.",
+                )
+                return
 
         delivered = await self._send_plain_user_text(ticket, admin_text(text))
         if delivered is None:

@@ -547,7 +547,7 @@ class Database:
                 last_activity_at = ?, last_activity_role = 'system',
                 awaiting_admin_since = NULL, unanswered_updates = 0,
                 notification_message_id = NULL
-            WHERE id = ?
+            WHERE id = ? AND status = 'closed'
             """,
             (utc_now(), ticket_id),
         )
@@ -579,7 +579,9 @@ class Database:
         )
         return [
             TicketWithUser(
-                ticket=Ticket(**{field.name: row[field.name] for field in fields(Ticket)}),
+                # _from_row, not Ticket(**row): keeps the "0 = whole chat ->
+                # None" normalization consistent with every other query.
+                ticket=_from_row(Ticket, row),
                 full_name=row["_full_name"],
                 username=row["_username"],
             )

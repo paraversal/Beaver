@@ -9,7 +9,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Message, MessageReactionUpdated
 
 from src.app import App
-from src.tickets import TicketService
+from src.tickets import TicketConflict, TicketService
 from src.texts import admin_help_text, admin_text, whereami_text
 from src.utils import human_age
 
@@ -242,8 +242,20 @@ async def reopen_command(message: Message, app: App) -> None:
     ticket = await _ticket_from_reply(message, app)
     if ticket is None:
         return
+    if ticket.is_open:
+        await _admin_notice(message, app, f"#{ticket.id} is already open.")
+        return
     service = TicketService(app)
-    await service.reopen(ticket, notify_user=True)
+    try:
+        await service.reopen(ticket, notify_user=True)
+    except TicketConflict as exc:
+        await _admin_notice(
+            message,
+            app,
+            f"#{exc.ticket_id} was not reopened: this user already has open "
+            f"ticket #{exc.open_ticket_id}.",
+        )
+        return
     await _delete_admin_message(message, app)
 
 

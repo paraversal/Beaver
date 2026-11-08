@@ -30,6 +30,33 @@ def _escaped_excerpt(
     return esc(value[:low].rstrip()) + "…"
 
 
+def _escaped_tail(value: str, limit: int) -> str:
+    """Like _escaped_excerpt, but keep the END of the text.
+
+    Used for the card's update log: when it overflows, the newest entries are
+    the ones an admin needs, so older ones are dropped from the front. The cut
+    snaps to the next entry boundary (blank line) so no entry starts mid-way.
+    """
+    value = truncate(value, len(value) + 1, preserve_newlines=True)
+    escaped = esc(value)
+    if len(escaped) <= limit:
+        return escaped
+    marker = "…\n"
+    budget = limit - len(marker)
+    low, high = 0, len(value)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if len(esc(value[len(value) - mid :])) <= budget:
+            low = mid
+        else:
+            high = mid - 1
+    tail = value[len(value) - low :]
+    boundary = tail.find("\n\n")
+    if boundary != -1 and boundary + 2 < len(tail):
+        tail = tail[boundary + 2 :]
+    return marker + esc(tail.lstrip())
+
+
 def challenge_text(question: str) -> str:
     return (
         "Hi! To keep spam out of support, please answer one question:\n\n"
@@ -147,11 +174,7 @@ def card_text(ticket: Ticket, user: User) -> str:
     if ticket.user_updates.strip():
         lines.append("")
         lines.append(html.bold("Updates"))
-        lines.append(
-            _escaped_excerpt(
-                ticket.user_updates.strip(), 1600, preserve_newlines=True
-            )
-        )
+        lines.append(_escaped_tail(ticket.user_updates.strip(), 1600))
     if ticket.unreachable_at:
         lines.append("⚠️ The bot cannot DM this user. Keep the username visible for manual contact.")
     return "\n".join(lines)
