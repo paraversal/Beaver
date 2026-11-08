@@ -1,2 +1,13 @@
-__pycache__
+__pycache__/
+*.py[cod]
+.venv/
 .env
+.env.*
+!.env.example
+!.env.staging.example
+*.db
+*.db-wal
+*.db-shm
+data/
+.uv-cache/
+.DS_Store
