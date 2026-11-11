@@ -21,7 +21,7 @@ uses `uv run main.py` (see README).
 ## First-time setup
 
 ```sh
-git clone https://github.com/paraversal/Beaver ~/Beaver
+git clone https://github.com/paraversal/beaver ~/Beaver
 cd ~/Beaver
 cp .env.example .env && chmod 600 .env   # fill in BOT_TOKEN etc.
 ./deploy.sh
